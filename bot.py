@@ -1,6 +1,6 @@
 import os
 import logging
-import requests
+import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
@@ -10,7 +10,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Fetch Token from Environment Variables (Render will supply this)
+# Fetch Token from Environment Variables
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 # --- Command: /start ---
@@ -23,28 +23,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    welcom_msg = (
+    welcome_msg = (
         f"Hello {user.first_name}! ⚽\n\n"
         "Welcome to your ultimate Football News Bot. "
         "Choose an option below to get started:"
     )
     
     if update.message:
-        await update.message.reply_text(welcom_msg, reply_markup=reply_markup)
+        await update.message.reply_text(welcome_msg, reply_markup=reply_markup)
     elif update.callback_query:
-        await update.callback_query.message.edit_text(welcom_msg, reply_markup=reply_markup)
+        await update.callback_query.message.edit_text(welcome_msg, reply_markup=reply_markup)
 
 # --- Button Click Handler ---
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
 
-    # Back button to return to home menu
     back_keyboard = [[InlineKeyboardButton("🔙 Back to Menu", callback_data="main_menu")]]
     back_markup = InlineKeyboardMarkup(back_keyboard)
 
     if query.data == "news":
-        # You can integrate a real news API here (e.g., NewsAPI or football-data.org)
         news_text = (
             "📰 **Latest Football Headlines:**\n\n"
             "1. *Champions League:* Thrilling quarter-final draws announced!\n"
@@ -65,7 +63,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     elif query.data == "transfers":
         transfer_text = (
             "🔄 **Top Transfer Rumors:**\n\n"
-            "• Midfield prodigy linked with a £80m summer switch.\n"
+            "• Midfield prodigy linked with an £80m summer switch.\n"
             "• Winger confirms open talks with European giants."
         )
         await query.message.edit_text(transfer_text, reply_markup=back_markup, parse_mode="Markdown")
@@ -73,7 +71,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     elif query.data == "main_menu":
         await start(update, context)
 
-def main() -> None:
+async def run_bot() -> None:
     if not TOKEN:
         logger.error("No TELEGRAM_BOT_TOKEN found in environment variables!")
         return
@@ -85,9 +83,24 @@ def main() -> None:
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button_handler))
 
-    # Start the Bot using Polling (Render Background Worker friendly)
-    logger.info("Starting bot polling...")
-    application.run_polling()
+    # Initialize and start polling safely
+    logger.info("Starting bot initialization...")
+    await application.initialize()
+    await application.start()
+    logger.info("Bot started polling successfully!")
+    
+    # Keep the bot running
+    await application.updater.start_polling()
+    
+    # Run indefinitely until stopped
+    stop_signal = asyncio.Event()
+    await stop_signal.wait()
+
+def main() -> None:
+    try:
+        asyncio.run(run_bot())
+    except KeyboardInterrupt:
+        logger.info("Bot stopped by user.")
 
 if __name__ == "__main__":
     main()
